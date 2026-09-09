@@ -130,6 +130,7 @@
 const API = 'https://script.google.com/macros/s/AKfycbwfcPse6qpwq2hwtTqCnSR37gbSV3TPX0xtrugYwyujqgmcJjrQjkcYQpeHKzY3Qua4eA/exec';
 
 const U = new URLSearchParams(location.search).get('u') || '';
+const V0 = new URLSearchParams(location.search).get('v') || '';
 const S = { unit:'週', view:'me', target:'', div:'', me:null, members:[] };
 
 const $ = id => document.getElementById(id);
@@ -272,6 +273,7 @@ async function start(){
         ds.onchange = () => { S.div = ds.value; load(); };
       }
     }
+    if (V0 === 'boss' && (S.me.isBoss || S.me.isCeo)){ setView('boss'); return; }
     load();
   }catch(e){ fail(e); }
 }

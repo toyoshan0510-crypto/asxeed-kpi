@@ -106,6 +106,10 @@
     <div class="period" id="period"></div>
     <div class="controls">
       <select id="target" hidden></select>
+      <select id="divSel" hidden>
+        <option value="イベント">イベント事業部</option>
+        <option value="常勤">常勤事業部</option>
+      </select>
       <div class="seg">
         <button id="btnWeek" aria-pressed="true">週</button>
         <button id="btnMonth" aria-pressed="false">月</button>
@@ -260,7 +264,12 @@ async function start(){
     }
     if (S.me.isBoss || S.me.isCeo){
       $('tabs').hidden = false;
-      if (S.me.isCeo) S.div = 'イベント';
+      if (S.me.isCeo){
+        S.div = 'イベント';
+        const ds = $('divSel');
+        ds.value = S.div;
+        ds.onchange = () => { S.div = ds.value; load(); };
+      }
     }
     load();
   }catch(e){ fail(e); }
@@ -281,6 +290,7 @@ function setView(v){
   $('tabMe').setAttribute('aria-pressed', v === 'me');
   $('tabBoss').setAttribute('aria-pressed', v === 'boss');
   $('target').hidden = (v !== 'me') || S.members.length <= 1;
+  $('divSel').hidden = (v !== 'boss') || !(S.me && S.me.isCeo);
   load();
 }
 $('tabMe').onclick = () => setView('me');

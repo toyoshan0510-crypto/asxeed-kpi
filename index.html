@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ASXEED KPI</title>
+<style>
+  :root{
+    --bg:#ffffff;
+    --surface:#f6f7f8;
+    --ink:#1a1d21;
+    --muted:#6b7280;
+    --line:#e4e7ea;
+    --ex:#1d4ed8;   /* ◎ */
+    --ok:#047857;   /* ○ */
+    --warn:#b45309; /* △ */
+    --bad:#b91c1c;  /* × */
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Noto Sans JP","Yu Gothic",sans-serif;
+    font-size:15px;
+    line-height:1.5;
+    -webkit-text-size-adjust:100%;
+    font-variant-numeric:tabular-nums;
+  }
+  .wrap{max-width:640px;margin:0 auto;padding:0 14px 64px;}
+
+  header{
+    position:sticky;top:0;z-index:10;
+    background:var(--bg);
+    border-bottom:1px solid var(--line);
+    padding:14px 0 10px;
+  }
+  .who{font-size:19px;font-weight:700;letter-spacing:.01em;}
+  .period{font-size:13px;color:var(--muted);margin-top:2px;}
+
+  .controls{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;}
+  select{
+    flex:1 1 auto;min-width:0;
+    font:inherit;font-size:14px;
+    padding:8px 10px;
+    border:1px solid var(--line);border-radius:8px;
+    background:var(--surface);color:var(--ink);
+  }
+  .seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;flex:0 0 auto;}
+  .seg button{
+    font:inherit;font-size:14px;
+    padding:8px 16px;border:0;background:var(--surface);color:var(--muted);cursor:pointer;
+  }
+  .seg button[aria-pressed="true"]{background:var(--ink);color:#fff;font-weight:600;}
+  .seg button:focus-visible{outline:2px solid var(--ex);outline-offset:-2px;}
+
+  .tabs{display:flex;gap:20px;margin-top:12px;}
+  .tabs button{
+    font:inherit;font-size:15px;font-weight:600;
+    background:none;border:0;padding:6px 0;cursor:pointer;
+    color:var(--muted);border-bottom:2px solid transparent;
+  }
+  .tabs button[aria-pressed="true"]{color:var(--ink);border-bottom-color:var(--ink);}
+
+  h2{font-size:14px;font-weight:700;color:var(--muted);margin:26px 0 8px;}
+
+  .item{border-bottom:1px solid var(--line);padding:12px 0;}
+  .item-head{display:flex;align-items:baseline;gap:10px;}
+  .item-name{font-weight:600;flex:1 1 auto;min-width:0;}
+  .badges{display:flex;gap:6px;flex:0 0 auto;}
+  .badge{
+    display:inline-flex;align-items:center;justify-content:center;
+    min-width:26px;height:24px;padding:0 5px;
+    border-radius:6px;font-size:15px;font-weight:700;
+    background:var(--surface);color:var(--muted);
+  }
+  .badge b{font-size:10px;font-weight:600;margin-right:3px;opacity:.75;}
+  .j-ex{background:#e8eefc;color:var(--ex);}
+  .j-ok{background:#e6f2ee;color:var(--ok);}
+  .j-warn{background:#fbf0e2;color:var(--warn);}
+  .j-bad{background:#fbeaea;color:var(--bad);}
+
+  .grid{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;margin-top:8px;font-size:14px;}
+  .grid dt{color:var(--muted);}
+  .grid dd{margin:0;text-align:right;}
+  dl{margin:0;}
+
+  .note{color:var(--muted);font-size:13px;padding:24px 0;text-align:center;}
+  .err{
+    background:#fbeaea;color:var(--bad);
+    border-radius:8px;padding:12px 14px;margin-top:20px;font-size:14px;
+  }
+  .spin{
+    width:18px;height:18px;margin:0 auto 8px;
+    border:2px solid var(--line);border-top-color:var(--ink);border-radius:50%;
+    animation:sp .8s linear infinite;
+  }
+  @keyframes sp{to{transform:rotate(360deg);}}
+  @media (prefers-reduced-motion:reduce){.spin{animation:none;}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="who" id="who">読み込み中</div>
+    <div class="period" id="period"></div>
+    <div class="controls">
+      <select id="target" hidden></select>
+      <div class="seg">
+        <button id="btnWeek" aria-pressed="true">週</button>
+        <button id="btnMonth" aria-pressed="false">月</button>
+      </div>
+    </div>
+    <div class="tabs" id="tabs" hidden>
+      <button id="tabMe" aria-pressed="true">自分のKPI</button>
+      <button id="tabBoss" aria-pressed="false">管理職KPI</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <div class="note"><div class="spin"></div>読み込んでいます</div>
+  </main>
+</div>
+
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbwfcPse6qpwq2hwtTqCnSR37gbSV3TPX0xtrugYwyujqgmcJjrQjkcYQpeHKzY3Qua4eA/exec';
+
+const U = new URLSearchParams(location.search).get('u') || '';
+const S = { unit:'週', view:'me', target:'', div:'', me:null, members:[] };
+
+const $ = id => document.getElementById(id);
+const main = $('main');
+
+/* ---------- 表示の整形 ---------- */
+const isRate = item => /^率：/.test(item) || /^継続率/.test(item);
+
+function num(v, item){
+  if (v === '' || v === null || v === undefined) return '—';
+  if (typeof v !== 'number') return String(v);
+  if (item && isRate(item)) return (v*100).toFixed(1) + '%';
+  return Math.round(v).toLocaleString('ja-JP');
+}
+function pct(v){
+  if (v === '' || v === null || v === undefined || typeof v !== 'number') return '—';
+  return (v*100).toFixed(1) + '%';
+}
+function badge(j, label){
+  const map = { '◎':'j-ex', '○':'j-ok', '△':'j-warn', '×':'j-bad' };
+  const cls = map[j] || '';
+  const tag = label ? '<b>'+label+'</b>' : '';
+  return '<span class="badge '+cls+'">'+tag+(j || '—')+'</span>';
+}
+function esc(s){
+  return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+function row(name, badges, pairs){
+  const dl = pairs.map(p => '<dt>'+esc(p[0])+'</dt><dd>'+p[1]+'</dd>').join('');
+  return '<div class="item"><div class="item-head">'
+       + '<span class="item-name">'+esc(name)+'</span>'
+       + '<span class="badges">'+badges+'</span></div>'
+       + '<dl class="grid">'+dl+'</dl></div>';
+}
+
+/* ---------- 通信 ---------- */
+async function api(params){
+  const qs = Object.entries(params).map(([k,v]) => k+'='+encodeURIComponent(v)).join('&');
+  const res = await fetch(API + '?' + qs);
+  if (!res.ok) throw new Error('通信に失敗しました（' + res.status + '）');
+  const data = await res.json();
+  if (data && data.error) throw new Error(data.error);
+  return data;
+}
+function loading(){
+  main.innerHTML = '<div class="note"><div class="spin"></div>読み込んでいます</div>';
+}
+function fail(e){
+  main.innerHTML = '<div class="err">'+esc(e.message || e)+'<br>時間をおいて画面を開き直してください。</div>';
+}
+
+/* ---------- 画面 ---------- */
+function renderMe(d){
+  $('who').textContent = d.name || '';
+  $('period').textContent = d.unit + '　' + (d.period || '');
+  if (!d.rows || !d.rows.length){ main.innerHTML = '<div class="note">この期間の数字はまだありません。</div>'; return; }
+
+  main.innerHTML = d.rows.map(r => row(
+    r.item,
+    badge(r.judgeOuter, '外注') + badge(r.judgeBoth, '込み'),
+    [
+      ['実績（外注）', num(r.outer, r.item)],
+      ['実績（込み）', num(r.both, r.item)],
+      ['自社', num(r.self, r.item)],
+      ['目標', num(r.goal, r.item)],
+      ['達成率', pct(r.rateOuter) + '　/　' + pct(r.rateBoth)]
+    ]
+  )).join('');
+}
+
+function renderBoss(d){
+  $('who').textContent = (d.div || '') + '　管理職KPI';
+  $('period').textContent = S.unit + '　' + (d.period || '');
+
+  let h = '';
+  if (d.summary && d.summary.length){
+    h += '<h2>全体</h2>' + d.summary.map(r => row(r.item, badge(r.judge), [
+      ['実績', num(r.actual, r.item)],
+      ['目標', num(r.goal, r.item)],
+      ['達成率', pct(r.rate)]
+    ])).join('');
+  }
+  if (d.areas && d.areas.length){
+    h += '<h2>エリア別</h2>' + d.areas.map(r => row(r.area, badge(r.judge), [
+      ['実績', num(r.actual)],
+      ['目標', num(r.goal)],
+      ['達成率', pct(r.rate)],
+      ['コマ（実績／目標）', num(r.komaA) + '　/　' + num(r.komaG)]
+    ])).join('');
+  }
+  if (d.roles && d.roles.length){
+    h += '<h2>役割バランス</h2>' + d.roles.map(r => row(r.role, badge(r.judge), [
+      ['コマ数', num(r.koma)],
+      ['構成比', pct(r.ratio)],
+      ['目標', pct(r.goal)]
+    ])).join('');
+  }
+  main.innerHTML = h || '<div class="note">表示できる数字がありません。</div>';
+}
+
+/* ---------- 読み込み ---------- */
+async function load(){
+  loading();
+  try{
+    if (S.view === 'me'){
+      renderMe(await api({ api:'me', u:U, t:S.target, unit:S.unit }));
+    } else {
+      renderBoss(await api({ api:'boss', u:U, div:S.div, unit:S.unit }));
+    }
+  }catch(e){ fail(e); }
+}
+
+async function start(){
+  if (!U){
+    main.innerHTML = '<div class="err">社員IDが指定されていません。<br>LINEのメニューから開き直してください。</div>';
+    $('who').textContent = '';
+    return;
+  }
+  try{
+    const m = await api({ api:'members', u:U });
+    S.me = m.me; S.members = m.members || [];
+    S.target = S.me.id;
+    S.div = String(S.me.div || '').replace('事業部','');
+
+    if (S.members.length > 1){
+      const sel = $('target');
+      sel.innerHTML = S.members.map(p =>
+        '<option value="'+esc(p.id)+'">'+esc(p.name)+'（'+esc(p.post)+'）</option>').join('');
+      sel.value = S.target;
+      sel.hidden = false;
+      sel.onchange = () => { S.target = sel.value; load(); };
+    }
+    if (S.me.isBoss || S.me.isCeo){
+      $('tabs').hidden = false;
+      if (S.me.isCeo) S.div = 'イベント';
+    }
+    load();
+  }catch(e){ fail(e); }
+}
+
+/* ---------- 操作 ---------- */
+function setUnit(u){
+  S.unit = u;
+  $('btnWeek').setAttribute('aria-pressed', u === '週');
+  $('btnMonth').setAttribute('aria-pressed', u === '月');
+  load();
+}
+$('btnWeek').onclick = () => setUnit('週');
+$('btnMonth').onclick = () => setUnit('月');
+
+function setView(v){
+  S.view = v;
+  $('tabMe').setAttribute('aria-pressed', v === 'me');
+  $('tabBoss').setAttribute('aria-pressed', v === 'boss');
+  $('target').hidden = (v !== 'me') || S.members.length <= 1;
+  load();
+}
+$('tabMe').onclick = () => setView('me');
+$('tabBoss').onclick = () => setView('boss');
+
+start();
+</script>
+</body>
+</html>

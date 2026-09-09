@@ -136,13 +136,14 @@ const $ = id => document.getElementById(id);
 const main = $('main');
 
 /* ---------- 表示の整形 ---------- */
-const isRate = item => /^率：/.test(item) || /^継続率/.test(item);
+const isRate = item => /率/.test(item) && !/^効率/.test(item);
 
 function num(v, item){
   if (v === '' || v === null || v === undefined) return '—';
   if (typeof v !== 'number') return String(v);
   if (item && isRate(item)) return (v*100).toFixed(1) + '%';
-  return Math.round(v).toLocaleString('ja-JP');
+  const d = (Number.isInteger(v) || Math.abs(v) >= 1000) ? 0 : 1;
+  return v.toLocaleString('ja-JP', { minimumFractionDigits:d, maximumFractionDigits:d });
 }
 function pct(v){
   if (v === '' || v === null || v === undefined || typeof v !== 'number') return '—';
